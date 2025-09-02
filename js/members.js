@@ -489,4 +489,5 @@ const Members = {
         Dashboard.showDashboard();
         Utils.showToast('✅ Tornato come Amministratore', 'success');
     }
+    };
 window.Members = Members;
