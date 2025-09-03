@@ -1,5 +1,5 @@
 // ============================================
-// AUTH.JS - Autenticazione e Login
+// AUTH.JS - Autenticazione e Login CORRETTA
 // ============================================
 
 const Auth = {
@@ -7,6 +7,8 @@ const Auth = {
     switchTab(event) {
         const tab = event.currentTarget;
         const type = tab.dataset.type;
+        
+        console.log('🔄 Switching to tab:', type); // Debug log
         
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
@@ -35,6 +37,9 @@ const Auth = {
                     const password = document.getElementById('password').value;
                     const userType = document.getElementById('userType').value;
                     
+                    // LOG PER DEBUG
+                    console.log('🔑 Login attempt:', { email, userType });
+                    
                     if (!email || !password) {
                         throw new Error('Credenziali mancanti');
                     }
@@ -43,7 +48,7 @@ const Auth = {
                         throw new Error('Email non valida');
                     }
                     
-                 // Controlla se l'utente è bloccato
+                    // Controlla se l'utente è bloccato
                     let isBlocked = false;
                     
                     if (userType === 'membro') {
@@ -62,13 +67,18 @@ const Auth = {
                         throw new Error('Account bloccato. Contatta l\'amministratore.');
                     }
                     
+                    // IMPORTANTE: Assicuriamoci che il tipo sia corretto
                     APP_STATE.currentUser = {
                         email: email,
-                        type: userType,
+                        type: userType, // QUESTO DEVE ESSERE 'admin', 'membro', o 'consulente'
                         name: email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1),
                         contractEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                        loginTime: Date.now()
+                        loginTime: Date.now(),
+                        circuit: 'Rimini' // Default circuit
                     };
+                    
+                    // LOG PER CONFERMA
+                    console.log('✅ User logged in as:', APP_STATE.currentUser.type);
                     
                     saveState();
                     Auth.showDashboard();
@@ -91,46 +101,91 @@ const Auth = {
         }
     },
 
-    // Show dashboard after login
+    // Show dashboard after login - MIGLIORATA
     showDashboard() {
+        console.log('📊 Showing dashboard for:', APP_STATE.currentUser?.type);
+        
+        // Nascondi login screen
         document.getElementById('loginScreen').style.display = 'none';
         
-        // Create dashboard if it doesn't exist
-        if (!document.getElementById('dashboard')) {
-            Dashboard.createDashboard();
+        // Pulisci eventuali dashboard esistenti
+        const existingDashboard = document.getElementById('dashboard');
+        if (existingDashboard) {
+            existingDashboard.remove();
         }
         
-        document.getElementById('dashboard').classList.add('active');
+        // Crea nuovo dashboard
+        Dashboard.createDashboard();
+        
+        // Mostra dashboard
+        const dashboard = document.getElementById('dashboard');
+        if (dashboard) {
+            dashboard.classList.add('active');
+            dashboard.style.display = 'block'; // Forza display
+        }
+        
+        // Aggiorna le informazioni utente
         Dashboard.updateUserInfo();
         Dashboard.updateStats();
         Dashboard.loadMenu();
         
+        // Se è un membro, mostra il countdown
         if (APP_STATE.currentUser.type === 'membro') {
             Dashboard.showCountdown();
         }
     },
 
-    // Logout
+    // Logout - MIGLIORATO
     logout() {
         if (confirm('Sei sicuro di voler uscire?')) {
+            // Pulisci timer
             if (window.notificationInterval) {
                 clearInterval(window.notificationInterval);
                 window.notificationInterval = null;
             }
             
+            // IMPORTANTE: Pulisci completamente l'utente
             APP_STATE.currentUser = null;
+            delete APP_STATE.currentUser; // Assicurati che sia completamente rimosso
+            
+            // Salva stato pulito
             saveState();
             
-            document.getElementById('dashboard').classList.remove('active');
-            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            // Pulisci il DOM
+            const dashboard = document.getElementById('dashboard');
+            if (dashboard) {
+                dashboard.classList.remove('active');
+                dashboard.style.display = 'none';
+                dashboard.innerHTML = ''; // Pulisci contenuto
+            }
+            
+            // Nascondi tutte le sezioni
+            document.querySelectorAll('.section').forEach(s => {
+                s.classList.remove('active');
+                s.style.display = 'none';
+            });
+            
+            // Mostra login screen
             document.getElementById('loginScreen').style.display = 'block';
             
+            // Reset form
             document.getElementById('email').value = '';
             document.getElementById('password').value = '';
             
+            // Reset al tab Admin di default
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            const adminTab = document.querySelector('.tab[data-type="admin"]');
+            if (adminTab) {
+                adminTab.classList.add('active');
+                document.getElementById('userType').value = 'admin';
+            }
+            
+            // Chiudi eventuali modali
             document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
             
             Utils.showToast('👋 Arrivederci!', 'success');
+            
+            console.log('🚪 User logged out successfully');
         }
     }
 };

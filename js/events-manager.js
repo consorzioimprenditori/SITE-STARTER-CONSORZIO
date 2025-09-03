@@ -1,5 +1,5 @@
 // ============================================
-// EVENTS-MANAGER.JS - Gestione Eventi COMPLETA E CORRETTA
+// EVENTS-MANAGER.JS - Gestione Eventi con PARTECIPAZIONE MEMBRI
 // ============================================
 
 const EventsManager = {
@@ -9,6 +9,15 @@ const EventsManager = {
         
         if (!APP_STATE.events) {
             APP_STATE.events = [];
+        }
+        
+        // Inizializza array per partecipazioni e valutazioni se non esistono
+        if (!APP_STATE.eventParticipations) {
+            APP_STATE.eventParticipations = [];
+        }
+        
+        if (!APP_STATE.eventRatings) {
+            APP_STATE.eventRatings = [];
         }
         
         // Crea eventi di esempio se non esistono
@@ -42,6 +51,18 @@ const EventsManager = {
                 visibility: {
                     membri: { all: false, circuits: ['Ancona'] },
                     consulenti: { all: false, circuits: ['Ancona'] }
+                }
+            },
+            {
+                id: 'EVT003',
+                title: 'Workshop Marketing Digitale',
+                date: '2025-01-15',
+                time: '10:00',
+                location: 'Sede Rimini',
+                notes: 'Evento passato per test valutazione',
+                visibility: {
+                    membri: { all: true, circuits: [] },
+                    consulenti: { all: true, circuits: [] }
                 }
             }
         ];
@@ -79,37 +100,883 @@ const EventsManager = {
         section.id = 'eventsManagerSection';
         section.className = 'section';
         
-        section.innerHTML = `
-            <div class="section-header">
-                <button class="back-btn" onclick="goBack()">← Indietro</button>
-                <h2>📌 Lista Eventi</h2>
-            </div>
-            
-            ${APP_STATE.currentUser && APP_STATE.currentUser.type === 'admin' ? 
-                `<div style="text-align: center; margin: 20px 0;">
+        // Contenuto diverso per admin e membri
+        const currentUser = APP_STATE.currentUser;
+        
+        if (currentUser && currentUser.type === 'admin') {
+            // ADMIN VIEW - INVARIATO
+            section.innerHTML = `
+                <div class="section-header">
+                    <button class="back-btn" onclick="goBack()">← Indietro</button>
+                    <h2>📌 Lista Eventi</h2>
+                </div>
+                
+                <div style="text-align: center; margin: 20px 0;">
                     <button class="btn btn-primary" onclick="EventsManager.openCreateModal()">
                         ➕ CREA NUOVO EVENTO
                     </button>
-                </div>` : ''
-            }
-            
-            <div id="eventsList" style="margin-top: 20px;">
-                <div class="loading">Caricamento eventi...</div>
-            </div>
-        `;
+                </div>
+                
+                <!-- Tab per admin per vedere partecipazioni -->
+                <div class="tabs" style="margin: 20px 0;">
+                    <button class="tab active" onclick="EventsManager.showAdminTab('events')">
+                        <span>Eventi</span>
+                    </button>
+                    <button class="tab" onclick="EventsManager.showAdminTab('participations')">
+                        <span>Partecipazioni (${this.getParticipationsCount()})</span>
+                    </button>
+                    <button class="tab" onclick="EventsManager.showAdminTab('ratings')">
+                        <span>Valutazioni (${this.getRatingsCount()})</span>
+                    </button>
+                </div>
+                
+                <div id="eventsList" style="margin-top: 20px;">
+                    <div class="loading">Caricamento eventi...</div>
+                </div>
+            `;
+        } else if (currentUser && currentUser.type === 'membro') {
+            // MEMBER VIEW - NUOVO
+            section.innerHTML = `
+                <div class="section-header">
+                    <button class="back-btn" onclick="goBack()">← Indietro</button>
+                    <h2 style="color: #c7ff00;">📌 Eventi del Consorzio</h2>
+                </div>
+                
+                <!-- Tab per eventi futuri e passati -->
+                <div class="tabs" style="margin: 20px 0; background: rgba(30, 30, 46, 0.9);">
+                    <button class="tab active" onclick="EventsManager.showMemberTab('future')">
+                        <span>Prossimi Eventi</span>
+                    </button>
+                    <button class="tab" onclick="EventsManager.showMemberTab('past')">
+                        <span>Eventi Passati</span>
+                    </button>
+                </div>
+                
+                <div id="eventsList" style="margin-top: 20px;">
+                    <div class="loading" style="color: #c7ff00;">Caricamento eventi...</div>
+                </div>
+            `;
+        } else {
+            // CONSULTANT VIEW
+            section.innerHTML = `
+                <div class="section-header">
+                    <button class="back-btn" onclick="goBack()">← Indietro</button>
+                    <h2>📌 Lista Eventi</h2>
+                </div>
+                
+                <div id="eventsList" style="margin-top: 20px;">
+                    <div class="loading">Caricamento eventi...</div>
+                </div>
+            `;
+        }
         
         sectionsContainer.appendChild(section);
+        this.addEventStyles();
     },
     
-    // Load events list
+    // Add event-specific styles with dark theme and green accents
+    addEventStyles() {
+        if (document.getElementById('eventManagerStyles')) return;
+        
+        const style = document.createElement('style');
+        style.id = 'eventManagerStyles';
+        style.textContent = `
+            /* STILI PER AREA MEMBRI - FONDO SCURO E VERDE FLUO */
+            .event-card-member {
+                background: linear-gradient(135deg, rgba(30, 30, 46, 0.95) 0%, rgba(42, 42, 62, 0.9) 100%);
+                border-radius: 16px;
+                padding: 25px;
+                margin-bottom: 20px;
+                border: 1px solid rgba(199, 255, 0, 0.2);
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+                transition: all 0.3s ease;
+            }
+            
+            .event-card-member:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 8px 25px rgba(199, 255, 0, 0.15);
+                border-color: #c7ff00;
+            }
+            
+            .event-card-member h3 {
+                color: #c7ff00;
+                margin-bottom: 15px;
+                font-size: 20px;
+                text-shadow: 0 0 10px rgba(199, 255, 0, 0.3);
+            }
+            
+            .event-info-row {
+                display: flex;
+                gap: 20px;
+                margin: 10px 0;
+                color: #ffffff;
+                font-size: 14px;
+            }
+            
+            .event-info-row span {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            /* PULSANTI PARTECIPAZIONE */
+            .participation-section {
+                background: rgba(199, 255, 0, 0.05);
+                border-radius: 12px;
+                padding: 20px;
+                margin-top: 20px;
+                border: 1px solid rgba(199, 255, 0, 0.1);
+            }
+            
+            .participation-buttons {
+                display: flex;
+                gap: 15px;
+                margin-bottom: 15px;
+            }
+            
+            .btn-participate {
+                flex: 1;
+                padding: 12px 20px;
+                border: 2px solid transparent;
+                border-radius: 10px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s;
+                text-transform: uppercase;
+                font-size: 14px;
+            }
+            
+            .btn-participate.yes {
+                background: linear-gradient(135deg, rgba(76, 175, 80, 0.2) 0%, rgba(76, 175, 80, 0.1) 100%);
+                color: #4caf50;
+                border-color: rgba(76, 175, 80, 0.3);
+            }
+            
+            .btn-participate.yes:hover,
+            .btn-participate.yes.selected {
+                background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+                color: white;
+                box-shadow: 0 5px 20px rgba(76, 175, 80, 0.4);
+                transform: translateY(-2px);
+            }
+            
+            .btn-participate.no {
+                background: linear-gradient(135deg, rgba(255, 68, 68, 0.2) 0%, rgba(255, 68, 68, 0.1) 100%);
+                color: #ff4444;
+                border-color: rgba(255, 68, 68, 0.3);
+            }
+            
+            .btn-participate.no:hover,
+            .btn-participate.no.selected {
+                background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
+                color: white;
+                box-shadow: 0 5px 20px rgba(255, 68, 68, 0.4);
+                transform: translateY(-2px);
+            }
+            
+            .participation-note {
+                margin-top: 15px;
+            }
+            
+            .participation-note textarea {
+                width: 100%;
+                min-height: 80px;
+                background: rgba(42, 42, 62, 0.8);
+                border: 1px solid rgba(199, 255, 0, 0.2);
+                border-radius: 10px;
+                padding: 12px;
+                color: #ffffff;
+                font-size: 14px;
+                resize: vertical;
+                transition: all 0.3s;
+            }
+            
+            .participation-note textarea:focus {
+                outline: none;
+                border-color: #c7ff00;
+                box-shadow: 0 0 0 3px rgba(199, 255, 0, 0.1);
+            }
+            
+            .participation-note textarea::placeholder {
+                color: #666;
+            }
+            
+            /* SISTEMA VALUTAZIONE STELLINE */
+            .rating-section {
+                background: rgba(199, 255, 0, 0.05);
+                border-radius: 12px;
+                padding: 20px;
+                margin-top: 20px;
+                border: 1px solid rgba(199, 255, 0, 0.1);
+            }
+            
+            .rating-title {
+                color: #c7ff00;
+                margin-bottom: 15px;
+                font-size: 16px;
+                font-weight: 600;
+            }
+            
+            .stars-container {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 15px;
+                font-size: 32px;
+            }
+            
+            .star {
+                cursor: pointer;
+                transition: all 0.2s;
+                filter: grayscale(100%);
+                opacity: 0.3;
+            }
+            
+            .star:hover {
+                transform: scale(1.2);
+                filter: grayscale(0%);
+                opacity: 1;
+            }
+            
+            .star.filled {
+                filter: grayscale(0%);
+                opacity: 1;
+                animation: starPop 0.3s ease;
+            }
+            
+            @keyframes starPop {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.3); }
+                100% { transform: scale(1.1); }
+            }
+            
+            .feedback-textarea {
+                width: 100%;
+                min-height: 100px;
+                background: rgba(42, 42, 62, 0.8);
+                border: 1px solid rgba(199, 255, 0, 0.2);
+                border-radius: 10px;
+                padding: 12px;
+                color: #ffffff;
+                font-size: 14px;
+                resize: vertical;
+                margin-bottom: 15px;
+            }
+            
+            .feedback-textarea:focus {
+                outline: none;
+                border-color: #c7ff00;
+                box-shadow: 0 0 0 3px rgba(199, 255, 0, 0.1);
+            }
+            
+            .btn-save-participation {
+                background: linear-gradient(135deg, #c7ff00 0%, #a8e000 100%);
+                color: #1e1e2e;
+                border: none;
+                padding: 12px 30px;
+                border-radius: 10px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s;
+                text-transform: uppercase;
+                box-shadow: 0 5px 20px rgba(199, 255, 0, 0.3);
+            }
+            
+            .btn-save-participation:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 30px rgba(199, 255, 0, 0.4);
+            }
+            
+            .btn-save-participation:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            
+            /* BADGE STATO PARTECIPAZIONE */
+            .participation-status {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-top: 10px;
+            }
+            
+            .participation-status.confirmed {
+                background: rgba(76, 175, 80, 0.2);
+                color: #4caf50;
+                border: 1px solid rgba(76, 175, 80, 0.3);
+            }
+            
+            .participation-status.declined {
+                background: rgba(255, 68, 68, 0.2);
+                color: #ff4444;
+                border: 1px solid rgba(255, 68, 68, 0.3);
+            }
+            
+            .participation-status.pending {
+                background: rgba(255, 152, 0, 0.2);
+                color: #ff9800;
+                border: 1px solid rgba(255, 152, 0, 0.3);
+            }
+            
+            /* ADMIN PARTICIPATION VIEW */
+            .participation-list-card {
+                background: rgba(42, 42, 62, 0.9);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 15px;
+                border: 1px solid rgba(199, 255, 0, 0.1);
+            }
+            
+            .participation-member-name {
+                color: #c7ff00;
+                font-weight: 600;
+                margin-bottom: 8px;
+            }
+            
+            .participation-response {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 8px;
+            }
+            
+            .participation-note-display {
+                background: rgba(30, 30, 46, 0.8);
+                padding: 10px;
+                border-radius: 8px;
+                color: #aaa;
+                font-style: italic;
+                margin-top: 8px;
+            }
+            
+            /* TAB ATTIVE */
+            .tabs .tab.active {
+                background: linear-gradient(135deg, #c7ff00 0%, #a8e000 100%);
+                color: #1e1e2e;
+            }
+        `;
+        document.head.appendChild(style);
+    },
+    
+    // Load events list - MODIFICATO PER MEMBRI
     loadEventsList() {
         const container = document.getElementById('eventsList');
         if (!container) return;
         
+        const currentUser = APP_STATE.currentUser;
+        
+        if (currentUser && currentUser.type === 'admin') {
+            // Admin view - mantieni originale
+            this.loadAdminEventsList();
+        } else if (currentUser && currentUser.type === 'membro') {
+            // Member view - nuova
+            this.loadMemberEventsList('future');
+        } else {
+            // Consultant view
+            this.loadConsultantEventsList();
+        }
+    },
+    
+    // NUOVA FUNZIONE: Load member events list
+    loadMemberEventsList(type = 'future') {
+        const container = document.getElementById('eventsList');
+        if (!container) return;
+        
         let events = APP_STATE.events || [];
+        const currentUser = APP_STATE.currentUser;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         
         // Filter by visibility
         events = events.filter(event => this.isEventVisibleToUser(event));
+        
+        // Filter by time (future or past)
+        if (type === 'future') {
+            events = events.filter(event => new Date(event.date) >= today);
+            events.sort((a, b) => new Date(a.date) - new Date(b.date));
+        } else {
+            events = events.filter(event => new Date(event.date) < today);
+            events.sort((a, b) => new Date(b.date) - new Date(a.date));
+        }
+        
+        if (events.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 60px 20px; background: rgba(30, 30, 46, 0.95); border-radius: 16px; border: 1px solid rgba(199, 255, 0, 0.1);">
+                    <h3 style="color: #c7ff00; margin-bottom: 10px;">
+                        ${type === 'future' ? '📅 Nessun evento in programma' : '📅 Nessun evento passato'}
+                    </h3>
+                    <p style="color: #aaa;">
+                        ${type === 'future' ? 'Non ci sono eventi futuri al momento' : 'Non ci sono eventi passati da valutare'}
+                    </p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div style="display: grid; gap: 20px;">';
+        
+        events.forEach(event => {
+            const eventDate = new Date(event.date);
+            const isPast = eventDate < today;
+            const participation = this.getUserParticipation(event.id, currentUser.email);
+            const rating = this.getUserRating(event.id, currentUser.email);
+            
+            html += `
+                <div class="event-card-member">
+                    <h3>
+                        ${event.title}
+                        ${this.isToday(eventDate) ? ' <span style="background: #ff9800; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">OGGI</span>' : ''}
+                    </h3>
+                    
+                    <div class="event-info-row">
+                        <span>📅 ${this.formatDate(event.date)}</span>
+                        <span>🕐 ${event.time || 'Tutto il giorno'}</span>
+                    </div>
+                    
+                    ${event.location ? `
+                        <div class="event-info-row">
+                            <span>📍 ${event.location}</span>
+                        </div>
+                    ` : ''}
+                    
+                    ${event.notes ? `
+                        <div class="event-info-row">
+                            <span style="color: #aaa; font-style: italic;">📝 ${event.notes}</span>
+                        </div>
+                    ` : ''}
+                    
+                    ${!isPast ? `
+                        <!-- SEZIONE PARTECIPAZIONE -->
+                        <div class="participation-section">
+                            <div class="rating-title">La tua partecipazione:</div>
+                            
+                            ${participation ? `
+                                <div class="participation-status ${participation.status}">
+                                    ${participation.status === 'confirmed' ? '✅ Parteciperò' : '❌ Non parteciperò'}
+                                </div>
+                                ${participation.note ? `
+                                    <div class="participation-note-display">
+                                        📝 ${participation.note}
+                                    </div>
+                                ` : ''}
+                                <button class="btn-participate" onclick="EventsManager.editParticipation('${event.id}')" style="margin-top: 10px; width: auto;">
+                                    ✏️ Modifica risposta
+                                </button>
+                            ` : `
+                                <div class="participation-buttons">
+                                    <button class="btn-participate yes" onclick="EventsManager.setParticipation('${event.id}', 'confirmed', this)">
+                                        ✅ PARTECIPERÒ
+                                    </button>
+                                    <button class="btn-participate no" onclick="EventsManager.setParticipation('${event.id}', 'declined', this)">
+                                        ❌ NON PARTECIPERÒ
+                                    </button>
+                                </div>
+                                
+                                <div class="participation-note" id="note-${event.id}" style="display: none;">
+                                    <textarea id="note-text-${event.id}" placeholder="Aggiungi una nota (es: arriverò in ritardo, porto un collega, ecc.)"></textarea>
+                                    <button class="btn-save-participation" onclick="EventsManager.saveParticipation('${event.id}')">
+                                        💾 SALVA RISPOSTA
+                                    </button>
+                                </div>
+                            `}
+                        </div>
+                    ` : `
+                        <!-- SEZIONE VALUTAZIONE PER EVENTI PASSATI -->
+                        <div class="rating-section">
+                            ${rating ? `
+                                <div class="rating-title">La tua valutazione:</div>
+                                <div class="stars-container">
+                                    ${'⭐'.repeat(rating.stars)}${'☆'.repeat(5 - rating.stars)}
+                                </div>
+                                ${rating.feedback ? `
+                                    <div class="participation-note-display">
+                                        💬 ${rating.feedback}
+                                    </div>
+                                ` : ''}
+                            ` : `
+                                <div class="rating-title">Valuta questo evento:</div>
+                                <div class="stars-container" id="stars-${event.id}">
+                                    ${[1,2,3,4,5].map(i => `
+                                        <span class="star" onclick="EventsManager.setRating('${event.id}', ${i})">⭐</span>
+                                    `).join('')}
+                                </div>
+                                
+                                <textarea class="feedback-textarea" id="feedback-${event.id}" 
+                                    placeholder="Condividi i tuoi suggerimenti per migliorare i prossimi eventi..."></textarea>
+                                
+                                <button class="btn-save-participation" onclick="EventsManager.saveRating('${event.id}')">
+                                    💾 INVIA VALUTAZIONE
+                                </button>
+                            `}
+                        </div>
+                    `}
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+    },
+    
+    // NUOVE FUNZIONI PER PARTECIPAZIONE
+    setParticipation(eventId, status, button) {
+        // Rimuovi selezione precedente
+        const buttons = button.parentElement.querySelectorAll('.btn-participate');
+        buttons.forEach(btn => btn.classList.remove('selected'));
+        
+        // Aggiungi selezione
+        button.classList.add('selected');
+        
+        // Mostra campo note
+        const noteSection = document.getElementById(`note-${eventId}`);
+        if (noteSection) {
+            noteSection.style.display = 'block';
+            noteSection.dataset.status = status;
+        }
+    },
+    
+    saveParticipation(eventId) {
+        const noteSection = document.getElementById(`note-${eventId}`);
+        const noteText = document.getElementById(`note-text-${eventId}`).value;
+        const status = noteSection.dataset.status || 'pending';
+        const currentUser = APP_STATE.currentUser;
+        
+        // Salva partecipazione
+        if (!APP_STATE.eventParticipations) {
+            APP_STATE.eventParticipations = [];
+        }
+        
+        // Rimuovi partecipazione esistente se presente
+        APP_STATE.eventParticipations = APP_STATE.eventParticipations.filter(
+            p => !(p.eventId === eventId && p.userEmail === currentUser.email)
+        );
+        
+        // Aggiungi nuova partecipazione
+        APP_STATE.eventParticipations.push({
+            id: 'PART_' + Date.now(),
+            eventId: eventId,
+            userEmail: currentUser.email,
+            userName: currentUser.name,
+            status: status,
+            note: noteText,
+            timestamp: new Date().toISOString()
+        });
+        
+        saveState();
+        Utils.showToast('✅ Risposta salvata!', 'success');
+        
+        // Ricarica lista
+        this.loadMemberEventsList('future');
+    },
+    
+    editParticipation(eventId) {
+        // Rimuovi partecipazione esistente per permettere modifica
+        const currentUser = APP_STATE.currentUser;
+        APP_STATE.eventParticipations = APP_STATE.eventParticipations.filter(
+            p => !(p.eventId === eventId && p.userEmail === currentUser.email)
+        );
+        saveState();
+        
+        // Ricarica lista
+        this.loadMemberEventsList('future');
+    },
+    
+    getUserParticipation(eventId, userEmail) {
+        if (!APP_STATE.eventParticipations) return null;
+        return APP_STATE.eventParticipations.find(
+            p => p.eventId === eventId && p.userEmail === userEmail
+        );
+    },
+    
+    // NUOVE FUNZIONI PER VALUTAZIONE
+    setRating(eventId, stars) {
+        const starsContainer = document.getElementById(`stars-${eventId}`);
+        if (!starsContainer) return;
+        
+        const starElements = starsContainer.querySelectorAll('.star');
+        starElements.forEach((star, index) => {
+            if (index < stars) {
+                star.classList.add('filled');
+            } else {
+                star.classList.remove('filled');
+            }
+        });
+        
+        // Salva temporaneamente il rating
+        starsContainer.dataset.rating = stars;
+    },
+    
+    saveRating(eventId) {
+        const starsContainer = document.getElementById(`stars-${eventId}`);
+        const feedbackTextarea = document.getElementById(`feedback-${eventId}`);
+        
+        const stars = parseInt(starsContainer.dataset.rating || '0');
+        const feedback = feedbackTextarea.value;
+        
+        if (stars === 0) {
+            Utils.showToast('⚠️ Seleziona almeno una stella', 'warning');
+            return;
+        }
+        
+        const currentUser = APP_STATE.currentUser;
+        
+        // Salva valutazione
+        if (!APP_STATE.eventRatings) {
+            APP_STATE.eventRatings = [];
+        }
+        
+        // Rimuovi valutazione esistente se presente
+        APP_STATE.eventRatings = APP_STATE.eventRatings.filter(
+            r => !(r.eventId === eventId && r.userEmail === currentUser.email)
+        );
+        
+        // Aggiungi nuova valutazione
+        APP_STATE.eventRatings.push({
+            id: 'RATE_' + Date.now(),
+            eventId: eventId,
+            userEmail: currentUser.email,
+            userName: currentUser.name,
+            stars: stars,
+            feedback: feedback,
+            timestamp: new Date().toISOString()
+        });
+        
+        saveState();
+        Utils.showToast('⭐ Valutazione inviata!', 'success');
+        
+        // Ricarica lista
+        this.loadMemberEventsList('past');
+    },
+    
+    getUserRating(eventId, userEmail) {
+        if (!APP_STATE.eventRatings) return null;
+        return APP_STATE.eventRatings.find(
+            r => r.eventId === eventId && r.userEmail === userEmail
+        );
+    },
+    
+    // Show member tab
+    showMemberTab(type) {
+        // Update tab active state
+        document.querySelectorAll('#eventsManagerSection .tabs .tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        event.currentTarget.classList.add('active');
+        
+        // Load appropriate list
+        this.loadMemberEventsList(type);
+    },
+    
+    // ADMIN FUNCTIONS - Show participations
+    showAdminTab(type) {
+        // Update tab active state
+        document.querySelectorAll('#eventsManagerSection .tabs .tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        event.currentTarget.classList.add('active');
+        
+        const container = document.getElementById('eventsList');
+        
+        if (type === 'events') {
+            this.loadAdminEventsList();
+        } else if (type === 'participations') {
+            this.loadAdminParticipations();
+        } else if (type === 'ratings') {
+            this.loadAdminRatings();
+        }
+    },
+    
+    loadAdminParticipations() {
+        const container = document.getElementById('eventsList');
+        if (!container) return;
+        
+        const participations = APP_STATE.eventParticipations || [];
+        
+        if (participations.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; background: rgba(30, 30, 46, 0.95); border-radius: 12px;">
+                    <h3 style="color: #c7ff00;">Nessuna partecipazione registrata</h3>
+                    <p style="color: #aaa;">I membri non hanno ancora risposto agli eventi</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Raggruppa per evento
+        const byEvent = {};
+        participations.forEach(p => {
+            const event = APP_STATE.events.find(e => e.id === p.eventId);
+            if (!event) return;
+            
+            if (!byEvent[p.eventId]) {
+                byEvent[p.eventId] = {
+                    event: event,
+                    participations: []
+                };
+            }
+            byEvent[p.eventId].participations.push(p);
+        });
+        
+        let html = '<div style="display: grid; gap: 20px;">';
+        
+        Object.values(byEvent).forEach(group => {
+            const confirmed = group.participations.filter(p => p.status === 'confirmed').length;
+            const declined = group.participations.filter(p => p.status === 'declined').length;
+            
+            html += `
+                <div style="background: rgba(30, 30, 46, 0.95); border-radius: 16px; padding: 20px; border: 1px solid rgba(199, 255, 0, 0.1);">
+                    <h3 style="color: #c7ff00; margin-bottom: 15px;">
+                        ${group.event.title}
+                        <span style="font-size: 14px; color: #aaa; margin-left: 10px;">
+                            ${this.formatDate(group.event.date)}
+                        </span>
+                    </h3>
+                    
+                    <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                        <span style="color: #4caf50;">✅ Parteciperanno: ${confirmed}</span>
+                        <span style="color: #ff4444;">❌ Non parteciperanno: ${declined}</span>
+                    </div>
+                    
+                    <div style="display: grid; gap: 10px;">
+                        ${group.participations.map(p => `
+                            <div class="participation-list-card">
+                                <div class="participation-member-name">
+                                    👤 ${p.userName} (${p.userEmail})
+                                </div>
+                                <div class="participation-response">
+                                    <span class="participation-status ${p.status}">
+                                        ${p.status === 'confirmed' ? '✅ Parteciperà' : '❌ Non parteciperà'}
+                                    </span>
+                                    <span style="color: #666; font-size: 12px;">
+                                        ${this.formatDateTime(p.timestamp)}
+                                    </span>
+                                </div>
+                                ${p.note ? `
+                                    <div class="participation-note-display">
+                                        📝 Nota: ${p.note}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+    },
+    
+    loadAdminRatings() {
+        const container = document.getElementById('eventsList');
+        if (!container) return;
+        
+        const ratings = APP_STATE.eventRatings || [];
+        
+        if (ratings.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; background: rgba(30, 30, 46, 0.95); border-radius: 12px;">
+                    <h3 style="color: #c7ff00;">Nessuna valutazione ricevuta</h3>
+                    <p style="color: #aaa;">I membri non hanno ancora valutato eventi passati</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Raggruppa per evento
+        const byEvent = {};
+        ratings.forEach(r => {
+            const event = APP_STATE.events.find(e => e.id === r.eventId);
+            if (!event) return;
+            
+            if (!byEvent[r.eventId]) {
+                byEvent[r.eventId] = {
+                    event: event,
+                    ratings: []
+                };
+            }
+            byEvent[r.eventId].ratings.push(r);
+        });
+        
+        let html = '<div style="display: grid; gap: 20px;">';
+        
+        Object.values(byEvent).forEach(group => {
+            const avgStars = group.ratings.reduce((sum, r) => sum + r.stars, 0) / group.ratings.length;
+            
+            html += `
+                <div style="background: rgba(30, 30, 46, 0.95); border-radius: 16px; padding: 20px; border: 1px solid rgba(199, 255, 0, 0.1);">
+                    <h3 style="color: #c7ff00; margin-bottom: 15px;">
+                        ${group.event.title}
+                        <span style="font-size: 14px; color: #aaa; margin-left: 10px;">
+                            ${this.formatDate(group.event.date)}
+                        </span>
+                    </h3>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <span style="color: #ffd700; font-size: 18px;">
+                            ${'⭐'.repeat(Math.round(avgStars))}${'☆'.repeat(5 - Math.round(avgStars))}
+                        </span>
+                        <span style="color: #aaa; margin-left: 10px;">
+                            Media: ${avgStars.toFixed(1)}/5 (${group.ratings.length} valutazioni)
+                        </span>
+                    </div>
+                    
+                    <div style="display: grid; gap: 10px;">
+                        ${group.ratings.map(r => `
+                            <div class="participation-list-card">
+                                <div class="participation-member-name">
+                                    👤 ${r.userName} (${r.userEmail})
+                                </div>
+                                <div style="color: #ffd700; margin: 8px 0;">
+                                    ${'⭐'.repeat(r.stars)}${'☆'.repeat(5 - r.stars)}
+                                </div>
+                                ${r.feedback ? `
+                                    <div class="participation-note-display">
+                                        💬 Feedback: ${r.feedback}
+                                    </div>
+                                ` : ''}
+                                <div style="color: #666; font-size: 12px; margin-top: 8px;">
+                                    ${this.formatDateTime(r.timestamp)}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+    },
+    
+    getParticipationsCount() {
+        return APP_STATE.eventParticipations ? APP_STATE.eventParticipations.length : 0;
+    },
+    
+    getRatingsCount() {
+        return APP_STATE.eventRatings ? APP_STATE.eventRatings.length : 0;
+    },
+    
+    formatDateTime(dateStr) {
+        const date = new Date(dateStr);
+        return date.toLocaleString('it-IT', {
+            day: '2-digit',
+            month: '2-digit', 
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    },
+    
+    // Load admin events list - ORIGINAL
+    loadAdminEventsList() {
+        const container = document.getElementById('eventsList');
+        if (!container) return;
+        
+        let events = APP_STATE.events || [];
         
         // Sort by date
         events.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -129,6 +996,12 @@ const EventsManager = {
         events.forEach(event => {
             const isPast = new Date(event.date) < new Date();
             const isToday = this.isToday(new Date(event.date));
+            
+            // Get participation stats
+            const participations = APP_STATE.eventParticipations ? 
+                APP_STATE.eventParticipations.filter(p => p.eventId === event.id) : [];
+            const confirmed = participations.filter(p => p.status === 'confirmed').length;
+            const declined = participations.filter(p => p.status === 'declined').length;
             
             html += `
                 <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
@@ -150,23 +1023,27 @@ const EventsManager = {
                                     👤 Membri: ${this.formatVisibility(event.visibility?.membri)}<br>
                                     💼 Consulenti: ${this.formatVisibility(event.visibility?.consulenti)}
                                 </div>
+                                ${participations.length > 0 ? `
+                                    <div style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                                        <strong>Partecipazioni:</strong><br>
+                                        ✅ Confermati: ${confirmed} | ❌ Non parteciperanno: ${declined}
+                                    </div>
+                                ` : ''}
                             </div>
                         </div>
                         
-                        ${APP_STATE.currentUser && APP_STATE.currentUser.type === 'admin' ? `
-                            <div style="display: flex; flex-direction: column; gap: 8px;">
-                                <button type="button" class="btn btn-small btn-primary" 
-                                        onclick="EventsManager.editEvent('${event.id}')"
-                                        style="cursor: pointer;">
-                                    ✏️ Modifica
-                                </button>
-                                <button type="button" class="btn btn-small btn-danger" 
-                                        onclick="EventsManager.deleteEvent('${event.id}')"
-                                        style="cursor: pointer;">
-                                    🗑️ Elimina
-                                </button>
-                            </div>
-                        ` : ''}
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <button type="button" class="btn btn-small btn-primary" 
+                                    onclick="EventsManager.editEvent('${event.id}')"
+                                    style="cursor: pointer;">
+                                ✏️ Modifica
+                            </button>
+                            <button type="button" class="btn btn-small btn-danger" 
+                                    onclick="EventsManager.deleteEvent('${event.id}')"
+                                    style="cursor: pointer;">
+                                🗑️ Elimina
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -175,6 +1052,59 @@ const EventsManager = {
         html += '</div>';
         container.innerHTML = html;
     },
+    
+    // Load consultant events list
+    loadConsultantEventsList() {
+        const container = document.getElementById('eventsList');
+        if (!container) return;
+        
+        let events = APP_STATE.events || [];
+        
+        // Filter by visibility
+        events = events.filter(event => this.isEventVisibleToUser(event));
+        
+        // Sort by date
+        events.sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        if (events.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; background: white; border-radius: 12px;">
+                    <h3>📅 Nessun evento trovato</h3>
+                    <p style="color: #999;">Non ci sono eventi programmati per te</p>
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<div style="display: grid; gap: 15px;">';
+        
+        events.forEach(event => {
+            const isPast = new Date(event.date) < new Date();
+            const isToday = this.isToday(new Date(event.date));
+            
+            html += `
+                <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <h3 style="margin: 0 0 10px 0;">
+                        ${event.title}
+                        ${isToday ? ' <span style="background: #ff9800; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">OGGI</span>' : ''}
+                        ${isPast ? ' <span style="background: #888; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">PASSATO</span>' : ''}
+                    </h3>
+                    
+                    <div style="color: #666; font-size: 14px;">
+                        <div>📅 ${this.formatDate(event.date)}</div>
+                        <div>🕐 ${event.time || 'Tutto il giorno'}</div>
+                        ${event.location ? `<div>📍 ${event.location}</div>` : ''}
+                        ${event.notes ? `<div>📝 ${event.notes}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+    },
+    
+    // RESTO DELLE FUNZIONI ORIGINALI (mantieni tutte le altre funzioni esistenti)
     
     // Format visibility for display
     formatVisibility(visibility) {
@@ -213,8 +1143,13 @@ const EventsManager = {
         return false;
     },
     
-    // Open create modal
+    // Open create modal - SOLO PER ADMIN
     openCreateModal() {
+        if (!APP_STATE.currentUser || APP_STATE.currentUser.type !== 'admin') {
+            Utils.showToast('⛔ Solo gli amministratori possono creare eventi', 'error');
+            return;
+        }
+        
         const modalHTML = `
             <div id="createEventModal" class="modal active">
                 <div class="modal-content" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
@@ -265,8 +1200,13 @@ const EventsManager = {
         document.body.appendChild(tempDiv.firstElementChild);
     },
     
-    // Edit event - SENZA CONTROLLI SULLA DATA
+    // Edit event - SOLO PER ADMIN
     editEvent(eventId) {
+        if (!APP_STATE.currentUser || APP_STATE.currentUser.type !== 'admin') {
+            Utils.showToast('⛔ Solo gli amministratori possono modificare eventi', 'error');
+            return;
+        }
+        
         console.log('📝 Modifica evento:', eventId);
         const event = APP_STATE.events.find(e => e.id === eventId);
         if (!event) {
@@ -439,7 +1379,7 @@ const EventsManager = {
         Utils.showToast('✅ Evento creato con successo!', 'success');
     },
     
-    // Update event - SENZA CONTROLLI SULLA DATA
+    // Update event
     updateEvent(eventId) {
         console.log('💾 Salvataggio modifiche evento:', eventId);
         const event = APP_STATE.events.find(e => e.id === eventId);
@@ -498,8 +1438,13 @@ const EventsManager = {
         return visibility;
     },
     
-    // Delete event - SENZA CONTROLLI SULLA DATA
+    // Delete event - SOLO PER ADMIN
     deleteEvent(eventId) {
+        if (!APP_STATE.currentUser || APP_STATE.currentUser.type !== 'admin') {
+            Utils.showToast('⛔ Solo gli amministratori possono eliminare eventi', 'error');
+            return;
+        }
+        
         console.log('🗑️ Richiesta eliminazione evento:', eventId);
         const event = APP_STATE.events.find(e => e.id === eventId);
         
@@ -621,7 +1566,7 @@ const EventsManager = {
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     EventsManager.init();
-    console.log('✅ EventsManager caricato e pronto!');
+    console.log('✅ EventsManager caricato e pronto con sistema partecipazioni!');
 });
 
 // Make globally available
