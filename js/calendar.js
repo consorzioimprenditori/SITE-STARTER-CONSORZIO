@@ -112,17 +112,23 @@ const Calendar = {
         // Create calendar HTML
         let calendarHTML = '<div class="calendar-grid">';
         
-        // Days of week headers
-        const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
-        daysOfWeek.forEach(day => {
-            calendarHTML += `<div class="calendar-header">${day}</div>`;
-        });
-        
-        // Empty cells for first week
-        const adjustedFirstDay = firstDay === 0 ? 7 : firstDay;
-        for (let i = 1; i < adjustedFirstDay; i++) {
-            calendarHTML += '<div class="calendar-day empty"></div>';
-        }
+      // Days of week headers - INIZIA DA LUNEDÌ
+const daysOfWeek = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+daysOfWeek.forEach(day => {
+    calendarHTML += `<div class="calendar-header">${day}</div>`;
+});
+
+// Empty cells for first week - ADATTATO PER LUNEDÌ
+// Se firstDay è 0 (domenica), deve diventare 6 (ultima posizione)
+// Se firstDay è 1 (lunedì), deve diventare 0 (prima posizione)
+let adjustedFirstDay = firstDay - 1;
+if (adjustedFirstDay === -1) {
+    adjustedFirstDay = 6; // Domenica diventa ultima
+}
+
+for (let i = 0; i < adjustedFirstDay; i++) {
+    calendarHTML += '<div class="calendar-day empty"></div>';
+}
         
         // Days of month
         for (let day = 1; day <= daysInMonth; day++) {
