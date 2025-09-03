@@ -1,5 +1,5 @@
 // ============================================
-// EVENTS-MANAGER.JS - Gestione Eventi COMPLETA
+// EVENTS-MANAGER.JS - Gestione Eventi COMPLETA E CORRETTA
 // ============================================
 
 const EventsManager = {
@@ -131,12 +131,13 @@ const EventsManager = {
             const isToday = this.isToday(new Date(event.date));
             
             html += `
-                <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); ${isPast ? 'opacity: 0.6;' : ''}">
+                <div style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                     <div style="display: flex; justify-content: space-between;">
                         <div style="flex: 1;">
                             <h3 style="margin: 0 0 10px 0;">
                                 ${event.title}
                                 ${isToday ? ' <span style="background: #ff9800; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">OGGI</span>' : ''}
+                                ${isPast ? ' <span style="background: #888; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">PASSATO</span>' : ''}
                             </h3>
                             
                             <div style="color: #666; font-size: 14px;">
@@ -154,10 +155,14 @@ const EventsManager = {
                         
                         ${APP_STATE.currentUser && APP_STATE.currentUser.type === 'admin' ? `
                             <div style="display: flex; flex-direction: column; gap: 8px;">
-                                <button class="btn btn-small btn-primary" onclick="EventsManager.editEvent('${event.id}')">
+                                <button type="button" class="btn btn-small btn-primary" 
+                                        onclick="EventsManager.editEvent('${event.id}')"
+                                        style="cursor: pointer;">
                                     ✏️ Modifica
                                 </button>
-                                <button class="btn btn-small btn-danger" onclick="EventsManager.deleteEvent('${event.id}')">
+                                <button type="button" class="btn btn-small btn-danger" 
+                                        onclick="EventsManager.deleteEvent('${event.id}')"
+                                        style="cursor: pointer;">
                                     🗑️ Elimina
                                 </button>
                             </div>
@@ -260,10 +265,14 @@ const EventsManager = {
         document.body.appendChild(tempDiv.firstElementChild);
     },
     
-    // Edit event
+    // Edit event - SENZA CONTROLLI SULLA DATA
     editEvent(eventId) {
+        console.log('📝 Modifica evento:', eventId);
         const event = APP_STATE.events.find(e => e.id === eventId);
-        if (!event) return;
+        if (!event) {
+            Utils.showToast('❌ Evento non trovato', 'error');
+            return;
+        }
         
         const modalHTML = `
             <div id="editEventModal" class="modal active">
@@ -427,13 +436,17 @@ const EventsManager = {
             Calendar.generateCalendar();
         }
         
-        Utils.showToast('✅ Evento creato!', 'success');
+        Utils.showToast('✅ Evento creato con successo!', 'success');
     },
     
-    // Update event
+    // Update event - SENZA CONTROLLI SULLA DATA
     updateEvent(eventId) {
+        console.log('💾 Salvataggio modifiche evento:', eventId);
         const event = APP_STATE.events.find(e => e.id === eventId);
-        if (!event) return;
+        if (!event) {
+            Utils.showToast('❌ Evento non trovato', 'error');
+            return;
+        }
         
         event.title = document.getElementById('editEventTitle').value;
         event.date = document.getElementById('editEventDate').value;
@@ -441,6 +454,7 @@ const EventsManager = {
         event.location = document.getElementById('editEventLocation').value;
         event.notes = document.getElementById('editEventNotes').value;
         event.visibility = this.getVisibilityFromForm('edit');
+        event.updatedAt = new Date().toISOString();
         
         saveState();
         
@@ -451,7 +465,7 @@ const EventsManager = {
             Calendar.generateCalendar();
         }
         
-        Utils.showToast('✅ Evento aggiornato!', 'success');
+        Utils.showToast('✅ Evento aggiornato con successo!', 'success');
     },
     
     // Get visibility from form
@@ -484,9 +498,19 @@ const EventsManager = {
         return visibility;
     },
     
-    // Delete event
+    // Delete event - SENZA CONTROLLI SULLA DATA
     deleteEvent(eventId) {
-        if (!confirm('Eliminare questo evento?')) return;
+        console.log('🗑️ Richiesta eliminazione evento:', eventId);
+        const event = APP_STATE.events.find(e => e.id === eventId);
+        
+        if (!event) {
+            Utils.showToast('❌ Evento non trovato', 'error');
+            return;
+        }
+        
+        if (!confirm(`Sei sicuro di voler eliminare l'evento "${event.title}"?\n\nQuesta azione non può essere annullata.`)) {
+            return;
+        }
         
         APP_STATE.events = APP_STATE.events.filter(e => e.id !== eventId);
         saveState();
@@ -497,13 +521,86 @@ const EventsManager = {
             Calendar.generateCalendar();
         }
         
-        Utils.showToast('✅ Evento eliminato', 'success');
+        Utils.showToast('✅ Evento eliminato con successo', 'success');
     },
     
     // Close modal
     closeModal(modalId) {
         const modal = document.getElementById(modalId);
         if (modal) modal.remove();
+    },
+    
+    // View event details
+    viewEventDetails(eventId) {
+        const event = APP_STATE.events.find(e => e.id === eventId);
+        if (!event) return;
+        
+        const isPast = new Date(event.date) < new Date();
+        
+        const modalHTML = `
+            <div id="viewEventModal" class="modal active">
+                <div class="modal-content" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3>📋 Dettagli Evento ${isPast ? '(PASSATO)' : ''}</h3>
+                        <span class="close-modal" onclick="EventsManager.closeModal('viewEventModal')">&times;</span>
+                    </div>
+                    <div class="modal-body">
+                        <div style="padding: 20px; background: #f9f9f9; border-radius: 10px;">
+                            <h4 style="color: #333; margin-bottom: 15px;">
+                                ${event.title}
+                            </h4>
+                            
+                            <div style="display: grid; gap: 12px;">
+                                <div>
+                                    <strong>Data:</strong> ${this.formatDate(event.date)}
+                                </div>
+                                <div>
+                                    <strong>Orario:</strong> ${event.time || 'Tutto il giorno'}
+                                </div>
+                                ${event.location ? `
+                                    <div>
+                                        <strong>Luogo:</strong> ${event.location}
+                                    </div>
+                                ` : ''}
+                                ${event.notes ? `
+                                    <div>
+                                        <strong>Note:</strong>
+                                        <div style="margin-top: 5px; padding: 10px; background: white; border-radius: 5px;">
+                                            ${event.notes}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                <div>
+                                    <strong>Visibilità Membri:</strong> ${this.formatVisibility(event.visibility?.membri)}
+                                </div>
+                                <div>
+                                    <strong>Visibilità Consulenti:</strong> ${this.formatVisibility(event.visibility?.consulenti)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="EventsManager.closeModal('viewEventModal')">
+                            Chiudi
+                        </button>
+                        ${APP_STATE.currentUser && APP_STATE.currentUser.type === 'admin' ? `
+                            <button class="btn btn-primary" onclick="EventsManager.closeModal('viewEventModal'); EventsManager.editEvent('${eventId}')">
+                                ✏️ Modifica
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = modalHTML;
+        document.body.appendChild(tempDiv.firstElementChild);
+    },
+    
+    // Open create event modal (alias per il calendario)
+    openCreateEventModal() {
+        this.openCreateModal();
     },
     
     // Helpers
@@ -524,6 +621,8 @@ const EventsManager = {
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     EventsManager.init();
+    console.log('✅ EventsManager caricato e pronto!');
 });
 
+// Make globally available
 window.EventsManager = EventsManager;
