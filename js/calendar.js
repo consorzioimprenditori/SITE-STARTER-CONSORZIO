@@ -1,5 +1,5 @@
 // ============================================
-// CALENDAR.JS - Calendario Eventi CORRETTO
+// CALENDAR.JS - Calendario Eventi CORRETTO CON FONDO SCURO
 // ============================================
 
 const Calendar = {
@@ -66,11 +66,6 @@ const Calendar = {
                 <button class="btn btn-sm" onclick="Calendar.previousMonth()">◀</button>
                 <span id="currentMonthYear" style="min-width: 200px; text-align: center;"></span>
                 <button class="btn btn-sm" onclick="Calendar.nextMonth()">▶</button>
-                ${APP_STATE.currentUser && APP_STATE.currentUser.type === 'admin' ? 
-                    `<button class="btn btn-primary btn-sm" onclick="Calendar.openCreateEvent()">
-                        ➕ Nuovo Evento
-                    </button>` : ''
-                }
             </div>
             
             <div id="calendarContainer"></div>
@@ -112,7 +107,7 @@ const Calendar = {
         
         // Get events for this month - FILTRATI PER VISIBILITÀ
         const monthEvents = this.getMonthEvents();
-        console.log('Eventi del mese:', monthEvents.length);
+        console.log('🎯 Eventi del mese da visualizzare:', monthEvents.length);
         
         // Create calendar HTML
         let calendarHTML = '<div class="calendar-grid">';
@@ -136,6 +131,15 @@ const Calendar = {
             const dayEvents = monthEvents.filter(e => e.date === dateStr);
             const isToday = this.isToday(date);
             
+            // Log eventi per ogni giorno con eventi
+            if (dayEvents.length > 0) {
+                console.log(`📌 Giorno ${day}: ${dayEvents.length} eventi`);
+            }
+            
+            // Determina se ci sono consulenze nel giorno
+            const hasConsultation = dayEvents.some(e => e.isConsultation);
+            const hasRegularEvent = dayEvents.some(e => !e.isConsultation);
+            
             calendarHTML += `
                 <div class="calendar-day ${isToday ? 'today' : ''} ${dayEvents.length > 0 ? 'has-events' : ''}"
                      onclick="Calendar.showDayEvents('${dateStr}')"
@@ -143,12 +147,10 @@ const Calendar = {
                     <div class="day-number">${day}</div>
                     ${dayEvents.length > 0 ? 
                         `<div class="event-indicators">
-                            ${dayEvents.slice(0, 3).map(e => 
-                                `<div class="event-dot ${e.category}" 
-                                      title="${e.title}"></div>`
-                            ).join('')}
-                            ${dayEvents.length > 3 ? 
-                                `<span class="more-events">+${dayEvents.length - 3}</span>` : ''
+                            ${hasRegularEvent ? '<div class="event-dot event-type" title="Eventi"></div>' : ''}
+                            ${hasConsultation ? '<div class="event-dot consultation-type" title="Consulenze"></div>' : ''}
+                            ${dayEvents.length > 2 ? 
+                                `<span class="more-events">+${dayEvents.length - 2}</span>` : ''
                             }
                         </div>` : ''
                     }
@@ -158,17 +160,13 @@ const Calendar = {
         
         calendarHTML += '</div>';
         
-        // Add legend
+        // Add simplified legend - SOLO EVENTI E CONSULENZE
         calendarHTML += `
             <div class="calendar-legend">
                 <h4>Legenda:</h4>
                 <div class="legend-items">
-                    <span><span class="event-dot meeting"></span> Meeting</span>
-                    <span><span class="event-dot workshop"></span> Workshop</span>
-                    <span><span class="event-dot conference"></span> Conferenza</span>
-                    <span><span class="event-dot social"></span> Social</span>
-                    <span><span class="event-dot training"></span> Formazione</span>
-                    <span><span class="event-dot other"></span> Altro</span>
+                    <span><span class="event-dot event-type"></span> Eventi</span>
+                    <span><span class="event-dot consultation-type"></span> Consulenze</span>
                 </div>
             </div>
         `;
@@ -184,14 +182,25 @@ const Calendar = {
         // Get ALL events from APP_STATE
         let events = APP_STATE.events || [];
         
+        // LOG PER DEBUG - VEDIAMO TUTTI GLI EVENTI
+        console.log('📅 Eventi totali in APP_STATE:', events.length);
+        console.log('📅 Lista eventi completa:', events);
+        
         // Filter by visibility for current user
         events = events.filter(event => this.isEventVisibleToUser(event));
         
+        console.log('👁️ Eventi visibili per utente corrente:', events.length);
+        
         // Filter by date range
-        return events.filter(event => {
+        const filteredEvents = events.filter(event => {
             const eventDate = new Date(event.date);
             return eventDate >= startDate && eventDate <= endDate;
         });
+        
+        console.log('📆 Eventi nel mese corrente:', filteredEvents.length);
+        console.log('📆 Dettaglio eventi del mese:', filteredEvents);
+        
+        return filteredEvents;
     },
     
     // Check if event is visible to current user
@@ -228,11 +237,17 @@ const Calendar = {
     
     // Show events for a specific day
     showDayEvents(dateStr) {
+        console.log('🔍 Mostra eventi per data:', dateStr);
+        
         // Get all events for this day
         let dayEvents = (APP_STATE.events || []).filter(e => e.date === dateStr);
         
+        console.log('📋 Eventi trovati per questa data (prima del filtro visibilità):', dayEvents.length);
+        
         // Filter by visibility
         dayEvents = dayEvents.filter(event => this.isEventVisibleToUser(event));
+        
+        console.log('📋 Eventi visibili per questa data:', dayEvents.length);
         
         const eventsListElement = document.getElementById('calendarEventsList');
         if (!eventsListElement) return;
@@ -241,7 +256,7 @@ const Calendar = {
             eventsListElement.innerHTML = `
                 <div class="no-events">
                     <h3>📅 ${this.formatDateForDisplay(dateStr)}</h3>
-                    <p>Nessun evento in questa data</p>
+                    <p>Nessun evento o consulenza in questa data</p>
                     ${APP_STATE.currentUser && APP_STATE.currentUser.type === 'admin' ? 
                         `<button class="btn btn-primary" onclick="Calendar.createEventForDate('${dateStr}')">
                             ➕ Crea Evento
@@ -252,39 +267,72 @@ const Calendar = {
             return;
         }
         
+        // Separa eventi e consulenze
+        const regularEvents = dayEvents.filter(e => !e.isConsultation);
+        const consultations = dayEvents.filter(e => e.isConsultation);
+        
         let eventsHTML = `
             <div class="day-events">
-                <h3>📅 Eventi del ${this.formatDateForDisplay(dateStr)}</h3>
+                <h3>📅 ${this.formatDateForDisplay(dateStr)}</h3>
                 <div class="events-list">
         `;
         
-        dayEvents.forEach(event => {
-            eventsHTML += `
-                <div class="event-card-mini" onclick="Calendar.showEventDetails('${event.id}')">
-                    <div class="event-time">${event.time || 'Tutto il giorno'}</div>
-                    <div class="event-info">
-                        <div class="event-title">
-                            <span class="event-category-icon">${this.getCategoryIcon(event.category)}</span>
-                            ${event.title}
+        // Mostra prima gli eventi regolari
+        if (regularEvents.length > 0) {
+            eventsHTML += '<h4 style="color: #c7ff00; margin-top: 15px;">📌 Eventi</h4>';
+            regularEvents.forEach(event => {
+                eventsHTML += `
+                    <div class="event-card-mini event-type-card" onclick="Calendar.showEventDetails('${event.id}')">
+                        <div class="event-time">${event.time || 'Tutto il giorno'}</div>
+                        <div class="event-info">
+                            <div class="event-title">
+                                <span class="event-category-icon">${this.getCategoryIcon(event.category)}</span>
+                                ${event.title}
+                            </div>
+                            ${event.location ? `<div class="event-location">📍 ${event.location}</div>` : ''}
+                            ${event.notes ? `<div class="event-notes-preview">📝 ${event.notes.substring(0, 50)}...</div>` : ''}
                         </div>
-                        ${event.location ? `<div class="event-location">📍 ${event.location}</div>` : ''}
-                        ${event.notes ? `<div class="event-notes-preview">📝 ${event.notes.substring(0, 50)}...</div>` : ''}
+                        ${APP_STATE.currentUser && APP_STATE.currentUser.type === 'admin' ? `
+                            <div class="event-actions" onclick="event.stopPropagation()">
+                                <button class="btn btn-sm btn-primary" onclick="Calendar.editEventFromCalendar('${event.id}')">✏️</button>
+                                <button class="btn btn-sm btn-danger" onclick="Calendar.deleteEventFromCalendar('${event.id}')">🗑️</button>
+                            </div>
+                        ` : ''}
                     </div>
-                    ${APP_STATE.currentUser && APP_STATE.currentUser.type === 'admin' ? `
-                        <div class="event-actions" onclick="event.stopPropagation()">
-                            <button class="btn btn-sm btn-primary" onclick="Calendar.editEventFromCalendar('${event.id}')">✏️</button>
-                            <button class="btn btn-sm btn-danger" onclick="Calendar.deleteEventFromCalendar('${event.id}')">🗑️</button>
+                `;
+            });
+        }
+        
+        // Mostra le consulenze
+        if (consultations.length > 0) {
+            eventsHTML += '<h4 style="color: #00bcd4; margin-top: 20px;">💼 Consulenze</h4>';
+            consultations.forEach(consultation => {
+                eventsHTML += `
+                    <div class="event-card-mini consultation-type-card" onclick="Calendar.showConsultationDetails('${consultation.id}')">
+                        <div class="event-time">${consultation.time || 'Da definire'}</div>
+                        <div class="event-info">
+                            <div class="event-title">
+                                💼 ${consultation.title || 'Consulenza'}
+                            </div>
+                            ${consultation.consultant ? `<div class="event-location">👤 ${consultation.consultant}</div>` : ''}
+                            ${consultation.specialty ? `<div class="event-notes-preview">📋 ${consultation.specialty}</div>` : ''}
                         </div>
-                    ` : ''}
-                </div>
-            `;
-        });
+                        ${APP_STATE.currentUser && APP_STATE.currentUser.type === 'admin' ? `
+                            <div class="event-actions" onclick="event.stopPropagation()">
+                                <button class="btn btn-sm btn-primary" onclick="Calendar.editConsultation('${consultation.id}')">✏️</button>
+                                <button class="btn btn-sm btn-danger" onclick="Calendar.deleteConsultation('${consultation.id}')">🗑️</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+        }
         
         eventsHTML += `
                 </div>
                 ${APP_STATE.currentUser && APP_STATE.currentUser.type === 'admin' ? 
                     `<button class="btn btn-primary btn-sm" onclick="Calendar.createEventForDate('${dateStr}')">
-                        ➕ Aggiungi altro evento
+                        ➕ Aggiungi evento o consulenza
                     </button>` : ''
                 }
             </div>
@@ -295,6 +343,7 @@ const Calendar = {
     
     // Show event details
     showEventDetails(eventId) {
+        console.log('👁️ Mostra dettagli evento:', eventId);
         if (window.EventsManager && typeof EventsManager.viewEventDetails === 'function') {
             EventsManager.viewEventDetails(eventId);
         } else {
@@ -302,9 +351,20 @@ const Calendar = {
         }
     },
     
+    // Show consultation details
+    showConsultationDetails(consultationId) {
+        console.log('👁️ Mostra dettagli consulenza:', consultationId);
+        // Implementazione per mostrare i dettagli della consulenza
+        const consultation = APP_STATE.events.find(e => e.id === consultationId);
+        if (consultation) {
+            Utils.showToast(`💼 Consulenza: ${consultation.title}`, 'info');
+        }
+    },
+    
     // Edit event from calendar
     editEventFromCalendar(eventId) {
         event.stopPropagation();
+        console.log('✏️ Modifica evento:', eventId);
         if (window.EventsManager && typeof EventsManager.editEvent === 'function') {
             EventsManager.editEvent(eventId);
         }
@@ -313,13 +373,34 @@ const Calendar = {
     // Delete event from calendar
     deleteEventFromCalendar(eventId) {
         event.stopPropagation();
+        console.log('🗑️ Elimina evento:', eventId);
         if (window.EventsManager && typeof EventsManager.deleteEvent === 'function') {
             EventsManager.deleteEvent(eventId);
         }
     },
     
+    // Edit consultation
+    editConsultation(consultationId) {
+        event.stopPropagation();
+        console.log('✏️ Modifica consulenza:', consultationId);
+        Utils.showToast('✏️ Modifica consulenza in arrivo', 'info');
+    },
+    
+    // Delete consultation
+    deleteConsultation(consultationId) {
+        event.stopPropagation();
+        console.log('🗑️ Elimina consulenza:', consultationId);
+        if (confirm('Eliminare questa consulenza?')) {
+            APP_STATE.events = APP_STATE.events.filter(e => e.id !== consultationId);
+            saveState();
+            this.generateCalendar();
+            Utils.showToast('✅ Consulenza eliminata', 'success');
+        }
+    },
+    
     // Create event for specific date
     createEventForDate(dateStr) {
+        console.log('➕ Crea evento per data:', dateStr);
         if (window.EventsManager && typeof EventsManager.openCreateEventModal === 'function') {
             EventsManager.openCreateEventModal();
             // Imposta la data nel form
@@ -327,6 +408,7 @@ const Calendar = {
                 const dateInput = document.getElementById('eventDate');
                 if (dateInput) {
                     dateInput.value = dateStr;
+                    console.log('📅 Data impostata nel form:', dateStr);
                 }
             }, 100);
         }
@@ -339,6 +421,7 @@ const Calendar = {
             this.currentMonth = 11;
             this.currentYear--;
         }
+        console.log('⬅️ Mese precedente:', this.currentMonth + 1, '/', this.currentYear);
         this.generateCalendar();
     },
     
@@ -349,6 +432,7 @@ const Calendar = {
             this.currentMonth = 0;
             this.currentYear++;
         }
+        console.log('➡️ Mese successivo:', this.currentMonth + 1, '/', this.currentYear);
         this.generateCalendar();
     },
     
@@ -395,93 +479,112 @@ const Calendar = {
         const style = document.createElement('style');
         style.id = 'calendarStyles';
         style.innerHTML = `
+            /* CALENDARIO CON FONDO SCURO */
             .calendar-grid {
                 display: grid;
                 grid-template-columns: repeat(7, 1fr);
-                gap: 10px;
+                gap: 8px;
                 margin: 20px 0;
-                background: white;
+                background: rgba(30, 30, 40, 0.95);
                 padding: 20px;
                 border-radius: 12px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                border: 1px solid rgba(199, 255, 0, 0.1);
+                min-height: 500px;
             }
             
             .calendar-header {
                 font-weight: bold;
                 text-align: center;
                 padding: 10px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
+                background: linear-gradient(135deg, rgba(199, 255, 0, 0.2) 0%, rgba(199, 255, 0, 0.1) 100%);
+                color: #c7ff00;
                 border-radius: 8px;
+                border: 1px solid rgba(199, 255, 0, 0.2);
             }
             
             .calendar-day {
                 min-height: 80px;
                 padding: 8px;
-                border: 1px solid #e0e0e0;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 8px;
                 cursor: pointer;
                 transition: all 0.3s;
                 position: relative;
-                background: white;
+                background: rgba(255, 255, 255, 0.05);
+                backdrop-filter: blur(5px);
             }
             
             .calendar-day:hover {
-                background: #f5f5f5;
+                background: rgba(199, 255, 0, 0.1);
                 transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                box-shadow: 0 4px 12px rgba(199, 255, 0, 0.2);
+                border-color: rgba(199, 255, 0, 0.3);
             }
             
             .calendar-day.empty {
-                background: #fafafa;
+                background: rgba(0, 0, 0, 0.2);
                 cursor: default;
+                opacity: 0.3;
             }
             
             .calendar-day.empty:hover {
                 transform: none;
                 box-shadow: none;
+                background: rgba(0, 0, 0, 0.2);
             }
             
             .calendar-day.today {
-                background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-                border: 2px solid #2196F3;
+                background: linear-gradient(135deg, rgba(199, 255, 0, 0.2) 0%, rgba(199, 255, 0, 0.1) 100%);
+                border: 2px solid #c7ff00;
+                box-shadow: 0 0 15px rgba(199, 255, 0, 0.3);
             }
             
             .calendar-day.has-events {
-                background: linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%);
+                background: rgba(199, 255, 0, 0.08);
+                border-color: rgba(199, 255, 0, 0.2);
             }
             
             .day-number {
                 font-weight: bold;
                 margin-bottom: 5px;
                 font-size: 16px;
+                color: #ffffff;
+            }
+            
+            .calendar-day.today .day-number {
+                color: #c7ff00;
             }
             
             .event-indicators {
                 display: flex;
-                gap: 3px;
+                gap: 5px;
                 flex-wrap: wrap;
-                margin-top: 5px;
+                margin-top: 8px;
             }
             
             .event-dot {
-                width: 10px;
-                height: 10px;
+                width: 12px;
+                height: 12px;
                 border-radius: 50%;
                 display: inline-block;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             }
             
-            .event-dot.meeting { background: #2196F3; }
-            .event-dot.workshop { background: #FF9800; }
-            .event-dot.conference { background: #9C27B0; }
-            .event-dot.social { background: #F44336; }
-            .event-dot.training { background: #4CAF50; }
-            .event-dot.other { background: #607D8B; }
+            /* COLORI PER EVENTI E CONSULENZE */
+            .event-dot.event-type { 
+                background: linear-gradient(135deg, #c7ff00, #a8e000);
+                box-shadow: 0 0 8px rgba(199, 255, 0, 0.5);
+            }
+            
+            .event-dot.consultation-type { 
+                background: linear-gradient(135deg, #00bcd4, #0097a7);
+                box-shadow: 0 0 8px rgba(0, 188, 212, 0.5);
+            }
             
             .more-events {
                 font-size: 10px;
-                color: #666;
+                color: #c7ff00;
                 margin-left: 4px;
                 font-weight: bold;
             }
@@ -492,40 +595,65 @@ const Calendar = {
                 align-items: center;
                 margin: 20px 0;
                 padding: 15px;
-                background: white;
+                background: rgba(42, 42, 62, 0.8);
                 border-radius: 12px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
                 gap: 15px;
+                border: 1px solid rgba(199, 255, 0, 0.1);
+            }
+            
+            .calendar-controls .btn {
+                min-width: 45px;
             }
             
             #currentMonthYear {
                 font-size: 20px;
                 font-weight: bold;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
+                color: #c7ff00;
+                text-shadow: 0 0 10px rgba(199, 255, 0, 0.3);
+                text-align: center;
+                flex: 1;
             }
             
+            /* LEGGENDA CON SFONDO SCURO - SOLO EVENTI E CONSULENZE */
             .calendar-legend {
-                background: white;
-                padding: 15px;
+                background: rgba(30, 30, 40, 0.95);
+                padding: 20px;
                 border-radius: 12px;
                 margin-top: 20px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                border: 1px solid rgba(199, 255, 0, 0.1);
+            }
+            
+            .calendar-legend h4 {
+                color: #c7ff00;
+                margin-bottom: 15px;
+                font-size: 18px;
+                text-shadow: 0 0 10px rgba(199, 255, 0, 0.3);
             }
             
             .legend-items {
                 display: flex;
-                flex-wrap: wrap;
-                gap: 15px;
+                gap: 30px;
                 margin-top: 10px;
             }
             
             .legend-items span {
                 display: flex;
                 align-items: center;
-                gap: 5px;
-                font-size: 14px;
+                gap: 10px;
+                font-size: 16px;
+                color: #ffffff;
+                padding: 8px 15px;
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                transition: all 0.3s;
+            }
+            
+            .legend-items span:hover {
+                background: rgba(255, 255, 255, 0.1);
+                transform: translateY(-2px);
             }
             
             .calendar-events-list {
@@ -533,38 +661,50 @@ const Calendar = {
             }
             
             .day-events {
-                background: white;
-                padding: 20px;
+                background: rgba(30, 30, 40, 0.95);
+                padding: 25px;
                 border-radius: 12px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                border: 1px solid rgba(199, 255, 0, 0.1);
             }
             
             .day-events h3 {
-                margin-bottom: 15px;
-                color: #333;
+                margin-bottom: 20px;
+                color: #c7ff00;
+                text-shadow: 0 0 10px rgba(199, 255, 0, 0.3);
             }
             
             .event-card-mini {
-                background: linear-gradient(135deg, #f8f8f8 0%, #e8e8e8 100%);
+                background: rgba(255, 255, 255, 0.05);
                 padding: 15px;
                 border-radius: 10px;
                 margin-bottom: 10px;
                 cursor: pointer;
                 transition: all 0.3s;
                 border-left: 4px solid;
-                border-image: linear-gradient(135deg, #667eea 0%, #764ba2 100%) 1;
                 position: relative;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            
+            .event-card-mini.event-type-card {
+                border-left: 4px solid #c7ff00;
+                background: rgba(199, 255, 0, 0.05);
+            }
+            
+            .event-card-mini.consultation-type-card {
+                border-left: 4px solid #00bcd4;
+                background: rgba(0, 188, 212, 0.05);
             }
             
             .event-card-mini:hover {
-                background: linear-gradient(135deg, #e8e8e8 0%, #d8d8d8 100%);
+                background: rgba(255, 255, 255, 0.1);
                 transform: translateX(5px);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             }
             
             .event-time {
                 font-size: 12px;
-                color: #666;
+                color: #aaa;
                 margin-bottom: 5px;
                 font-weight: 600;
             }
@@ -572,12 +712,12 @@ const Calendar = {
             .event-title {
                 font-weight: bold;
                 margin-bottom: 5px;
-                color: #333;
+                color: #ffffff;
             }
             
             .event-location {
                 font-size: 12px;
-                color: #666;
+                color: #aaa;
             }
             
             .event-notes-preview {
@@ -603,18 +743,19 @@ const Calendar = {
             .no-events {
                 text-align: center;
                 padding: 40px;
-                background: white;
+                background: rgba(30, 30, 40, 0.95);
                 border-radius: 12px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                border: 1px solid rgba(199, 255, 0, 0.1);
             }
             
             .no-events h3 {
-                color: #666;
+                color: #c7ff00;
                 margin-bottom: 10px;
             }
             
             .no-events p {
-                color: #999;
+                color: #aaa;
                 margin-bottom: 20px;
             }
         `;
@@ -625,6 +766,7 @@ const Calendar = {
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', function() {
     Calendar.init();
+    console.log('🚀 Calendar.js caricato e inizializzato');
 });
 
 // Make Calendar globally available

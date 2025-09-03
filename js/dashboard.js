@@ -1,5 +1,5 @@
 // ============================================
-// DASHBOARD.JS - Dashboard Management COMPLETO
+// DASHBOARD.JS - Dashboard Management COMPLETO E CORRETTO
 // ============================================
 
 const Dashboard = {
@@ -49,7 +49,7 @@ const Dashboard = {
         }
     },
 
-    // Show admin dashboard
+    // Show admin dashboard - CORRETTO con showCalendar()
     showAdmin() {
         const dashboard = document.getElementById('dashboard');
         dashboard.innerHTML = `
@@ -73,7 +73,7 @@ const Dashboard = {
                 </div>
                 
                 <!-- GESTIONE EVENTI E CALENDARIO -->
-                <div class="dashboard-card" onclick="Calendar.show()">
+                <div class="dashboard-card" onclick="Calendar.showCalendar()">
                     <div class="card-icon">📅</div>
                     <div class="card-title">Calendario Eventi</div>
                     <div class="card-subtitle">Visualizza calendario e crea eventi</div>
@@ -129,7 +129,7 @@ const Dashboard = {
         this.addDashboardStyles();
     },
 
-    // Show member dashboard
+    // Show member dashboard - CORRETTO con showCalendar()
     showMember() {
         const dashboard = document.getElementById('dashboard');
         dashboard.innerHTML = `
@@ -150,7 +150,7 @@ const Dashboard = {
             </div>
             
             <div class="admin-grid">
-                <div class="dashboard-card" onclick="Calendar.show()">
+                <div class="dashboard-card" onclick="Calendar.showCalendar()">
                     <div class="card-icon">📅</div>
                     <div class="card-title">Calendario Eventi</div>
                     <div class="card-subtitle">Visualizza eventi</div>
@@ -180,7 +180,7 @@ const Dashboard = {
         this.showCountdown();
     },
 
-    // Show consultant dashboard
+    // Show consultant dashboard - CORRETTO con showCalendar()
     showConsultant() {
         const dashboard = document.getElementById('dashboard');
         dashboard.innerHTML = `
@@ -196,7 +196,7 @@ const Dashboard = {
                     <div class="card-subtitle">Gestisci appuntamenti</div>
                 </div>
                 
-                <div class="dashboard-card" onclick="Calendar.show()">
+                <div class="dashboard-card" onclick="Calendar.showCalendar()">
                     <div class="card-icon">📅</div>
                     <div class="card-title">Calendario</div>
                     <div class="card-subtitle">Visualizza eventi</div>
